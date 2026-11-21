@@ -7,3 +7,4 @@ public/data/MyEBirdData.csv
 *.local
 temp/
 pushit.sh
+public/data/review/

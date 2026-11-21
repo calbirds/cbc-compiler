@@ -198,6 +198,7 @@ app.innerHTML = `
                 <div class="tabs" role="tablist" aria-label="Plot panel">
                   <button id="tabTable" class="tab-button active" type="button" role="tab" aria-selected="true">Table</button>
                   <button id="tabPlot" class="tab-button" type="button" role="tab" aria-selected="false">Plot</button>
+                  <button id="tabReview" class="tab-button" type="button" role="tab" aria-selected="false" hidden>Review</button>
                 </div>
 
                 <div class="tabs-tools" aria-label="Table tools">
@@ -247,6 +248,21 @@ app.innerHTML = `
 
               <div id="panelPlot" class="tab-panel" role="tabpanel" hidden>
                 <div id="speciesPlot" class="species-plot" aria-label="Species plot"></div>
+              </div>
+
+              <div id="panelReview" class="tab-panel" role="tabpanel" hidden>
+                <div class="review-head">
+                  <div id="reviewSummary" class="review-summary"></div>
+                  <div class="review-tools">
+                    <select id="reviewFilter" class="tab-select" aria-label="Review filter">
+                      <option value="open" selected>Undecided</option>
+                      <option value="all">All</option>
+                      <option value="decided">Decided</option>
+                    </select>
+                    <button id="reviewExport" class="tab-button" type="button">Export decisions</button>
+                  </div>
+                </div>
+                <div id="reviewTable" class="review-table-wrap"></div>
               </div>
             </div>
           </section>
@@ -1120,7 +1136,14 @@ async function setActiveCountCircle(circleId, { preserveCsv = true } = {}) {
 async function initWorkbench() {
   await loadCountCircleCatalog();
   renderCountCircleSelected();
-  setStatus('Select a count circle or drop a count-circle areas file to begin.');
+  const wanted = (new URLSearchParams(window.location.search).get('circle') || 'CAPC').trim().toUpperCase();
+  const initial = countCircleCatalog.find((circle) => (circle?.code || '').toString().trim().toUpperCase() === wanted);
+  if (initial && wanted !== 'NONE') {
+    setStatus('Loading count circle…');
+    await setActiveCountCircle(initial.id, { preserveCsv: false });
+    await loadDefaultCsv();
+  }
+  setStatus(initial ? '' : 'Select a count circle or drop a count-circle areas file to begin.');
 }
 
 let countCircleSearchTimer = null;
@@ -2351,25 +2374,232 @@ function computeTripDataFromCurrentCsv() {
 }
 
 function setActiveTab(tabName) {
-  const isTable = tabName === 'table';
-
-  tabTableEl.classList.toggle('active', isTable);
-  tabPlotEl.classList.toggle('active', !isTable);
-  tabTableEl.setAttribute('aria-selected', String(isTable));
-  tabPlotEl.setAttribute('aria-selected', String(!isTable));
-
-  panelTableEl.classList.toggle('active', isTable);
-  panelPlotEl.classList.toggle('active', !isTable);
-  panelTableEl.hidden = !isTable;
-  panelPlotEl.hidden = isTable;
-
-  if (!isTable) {
-    renderSpeciesPlotFromCurrentCsv();
+  const tabs = [
+    ['table', tabTableEl, panelTableEl],
+    ['plot', tabPlotEl, panelPlotEl],
+    ['review', tabReviewEl, panelReviewEl],
+  ];
+  for (const [name, tab, panel] of tabs) {
+    if (!tab || !panel) continue;
+    const on = name === tabName;
+    tab.classList.toggle('active', on);
+    tab.setAttribute('aria-selected', String(on));
+    panel.classList.toggle('active', on);
+    panel.hidden = !on;
   }
+  const tools = document.querySelector('.tabs-tools');
+  if (tools) tools.style.display = tabName === 'review' ? 'none' : '';
+  document.body.classList.toggle('review-mode', tabName === 'review');
+  if (tabName !== 'review') setTimeout(() => map?.invalidateSize?.(), 50);
+
+  if (tabName === 'plot') renderSpeciesPlotFromCurrentCsv();
+  if (tabName === 'review') renderReview();
 }
 
 tabTableEl.addEventListener('click', () => setActiveTab('table'));
 tabPlotEl.addEventListener('click', () => setActiveTab('plot'));
+
+const tabReviewEl = document.getElementById('tabReview');
+const panelReviewEl = document.getElementById('panelReview');
+const reviewTableEl = document.getElementById('reviewTable');
+const reviewSummaryEl = document.getElementById('reviewSummary');
+const reviewFilterEl = document.getElementById('reviewFilter');
+const REVIEW_STORE_KEY = 'capcReviewDecisions.v1';
+let reviewData = null;
+
+function reviewKey(item) {
+  return `${item.group}|${item.year}`;
+}
+
+function loadReviewDecisions() {
+  try {
+    return JSON.parse(localStorage.getItem(REVIEW_STORE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReviewDecisions(decisions) {
+  try {
+    localStorage.setItem(REVIEW_STORE_KEY, JSON.stringify(decisions));
+  } catch {
+  }
+}
+
+function titleCaseGroup(item) {
+  if (item.rows && item.rows.length) return item.rows.join(' + ');
+  return item.group.replace(/(^|[\s-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+}
+
+function reviewCell(tag, text, className) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  return el;
+}
+
+function reviewSeries(item) {
+  const wrap = reviewCell('div', null, 'review-series');
+  const rows = [['Steve', item.steveSeries], ['CBC', item.audubonSeries]];
+  const head = reviewCell('div', null, 'review-series-row review-series-years');
+  head.appendChild(reviewCell('span', '', 'review-series-label'));
+  for (const y of item.years) head.appendChild(reviewCell('span', String(y).slice(2), y === item.year ? 'is-year' : ''));
+  wrap.appendChild(head);
+  for (const [label, values] of rows) {
+    const row = reviewCell('div', null, 'review-series-row');
+    row.appendChild(reviewCell('span', label, 'review-series-label'));
+    values.forEach((v, i) => {
+      const y = item.years[i];
+      const out = y < 1971 || y > 2020 ? '' : v === null ? '–' : v;
+      row.appendChild(reviewCell('span', out, item.years[i] === item.year ? 'is-year' : ''));
+    });
+    wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+function renderReview() {
+  if (!reviewData || !reviewTableEl) return;
+  const decisions = loadReviewDecisions();
+  const items = reviewData.items || [];
+  const decided = items.filter((it) => decisions[reviewKey(it)]?.choice).length;
+  const byType = {};
+  for (const it of items) byType[it.type] = (byType[it.type] || 0) + 1;
+  if (reviewSummaryEl) {
+    reviewSummaryEl.textContent = `Putah Creek 1971–2020: ${items.length} cells where Steve's table and Audubon's CBC data differ (out of ${reviewData.agreeCells ?? '—'} that agree). Decided ${decided} of ${items.length}. Undecided cells keep Steve's value.`;
+  }
+  const filter = reviewFilterEl?.value || 'open';
+  const shown = items.filter((it) => {
+    const has = Boolean(decisions[reviewKey(it)]?.choice);
+    return filter === 'all' || (filter === 'decided' ? has : !has);
+  });
+
+  const table = reviewCell('table', null, 'review-table');
+  const thead = reviewCell('thead');
+  const hr = reviewCell('tr');
+  for (const h of ['Species', 'Year', 'Kind', 'Steve', 'CBC', 'CBC 2006', 'Surrounding years', 'Suggestion', 'Decision', 'Note']) hr.appendChild(reviewCell('th', h));
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = reviewCell('tbody');
+  for (const it of shown) {
+    const key = reviewKey(it);
+    const dec = decisions[key] || {};
+    const tr = reviewCell('tr', null, dec.choice ? 'is-decided' : '');
+    tr.appendChild(reviewCell('td', titleCaseGroup(it), 'review-species'));
+    tr.appendChild(reviewCell('td', it.year));
+    tr.appendChild(reviewCell('td', it.type, 'review-kind'));
+    tr.appendChild(reviewCell('td', it.steve, 'review-num'));
+    tr.appendChild(reviewCell('td', it.audubon === null ? 'blank' : it.audubon, 'review-num'));
+    tr.appendChild(reviewCell('td', it.audubon2006 === null ? '' : it.audubon2006, 'review-num'));
+    const seriesTd = reviewCell('td');
+    seriesTd.appendChild(reviewSeries(it));
+    tr.appendChild(seriesTd);
+    tr.appendChild(reviewCell('td', it.suggestion || '', `review-suggest review-suggest-${(it.suggestion || 'none').toLowerCase()}`));
+
+    const decTd = reviewCell('td', null, 'review-decision');
+    const choices = [['steve', `Steve (${it.steve})`], ['cbc', `CBC (${it.audubon === null ? '–' : it.audubon})`], ['other', 'Other']];
+    for (const [val, label] of choices) {
+      if (val === 'cbc' && it.audubon === null) continue;
+      const lab = reviewCell('label', null, 'review-choice');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = `rv-${key}`;
+      input.value = val;
+      input.checked = dec.choice === val;
+      input.addEventListener('change', () => {
+        const all = loadReviewDecisions();
+        all[key] = { ...(all[key] || {}), choice: val };
+        saveReviewDecisions(all);
+        renderReview();
+      });
+      lab.append(input, document.createTextNode(` ${label}`));
+      decTd.appendChild(lab);
+    }
+    if (dec.choice === 'other') {
+      const num = document.createElement('input');
+      num.type = 'number';
+      num.min = '0';
+      num.className = 'review-other';
+      num.value = dec.value ?? '';
+      num.addEventListener('change', () => {
+        const all = loadReviewDecisions();
+        all[key] = { ...(all[key] || {}), choice: 'other', value: num.value === '' ? null : Number(num.value) };
+        saveReviewDecisions(all);
+      });
+      decTd.appendChild(num);
+    }
+    if (dec.choice) {
+      const clear = reviewCell('button', 'Clear', 'review-clear');
+      clear.type = 'button';
+      clear.addEventListener('click', () => {
+        const all = loadReviewDecisions();
+        delete all[key];
+        saveReviewDecisions(all);
+        renderReview();
+      });
+      decTd.appendChild(clear);
+    }
+    tr.appendChild(decTd);
+
+    const noteTd = reviewCell('td');
+    const note = document.createElement('input');
+    note.type = 'text';
+    note.className = 'review-note';
+    note.value = dec.note || '';
+    note.placeholder = 'Note';
+    note.addEventListener('change', () => {
+      const all = loadReviewDecisions();
+      all[key] = { ...(all[key] || {}), note: note.value };
+      saveReviewDecisions(all);
+    });
+    noteTd.appendChild(note);
+    tr.appendChild(noteTd);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  reviewTableEl.replaceChildren(shown.length ? table : reviewCell('div', 'Nothing to show for this filter.', 'review-empty'));
+}
+
+function exportReviewDecisions() {
+  if (!reviewData) return;
+  const decisions = loadReviewDecisions();
+  const esc = (v) => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [['group', 'rows', 'year', 'kind', 'steve', 'cbc', 'decision', 'value', 'note'].join(',')];
+  for (const it of reviewData.items || []) {
+    const d = decisions[reviewKey(it)] || {};
+    const choice = d.choice || 'steve (default)';
+    const value = d.choice === 'cbc' ? it.audubon : d.choice === 'other' ? d.value : it.steve;
+    lines.push([it.group, (it.rows || []).join(' + '), it.year, it.type, it.steve, it.audubon, choice, value, d.note || ''].map(esc).join(','));
+  }
+  const blob = new Blob([lines.join('\n') + '\n'], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'CAPC_review_decisions.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function loadReviewData() {
+  try {
+    const res = await fetch(assetUrl('data/review/CAPC_steve_vs_audubon.json'), { cache: 'no-store' });
+    if (!res.ok) return;
+    const text = await res.text();
+    if (!text.trim().startsWith('{')) return;
+    reviewData = JSON.parse(text);
+    if (tabReviewEl) tabReviewEl.hidden = false;
+  } catch {
+  }
+}
+
+tabReviewEl?.addEventListener('click', () => setActiveTab('review'));
+reviewFilterEl?.addEventListener('change', renderReview);
+document.getElementById('reviewExport')?.addEventListener('click', exportReviewDecisions);
+loadReviewData();
 
 function parseCount(value) {
   const v = (value ?? '').toString().trim();
@@ -3639,7 +3869,7 @@ async function loadDefaultCsv() {
 
   try {
     setStatus('Loading default CSV…');
-    const res = await fetch(assetUrl('MyEBirdData.csv'));
+    const res = await fetch(assetUrl('data/MyEBirdData.csv'));
     if (!res.ok) {
 
       setStatus('');

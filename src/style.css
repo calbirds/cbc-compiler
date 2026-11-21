@@ -1238,3 +1238,53 @@ code {
     flex-basis: 320px;
   }
 }
+
+.review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.review-summary { font-size: 0.9rem; color: #374151; max-width: 70ch; }
+.review-tools { display: flex; gap: 8px; align-items: center; }
+.review-table-wrap { overflow: auto; max-height: 100%; }
+.review-table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+.review-table th {
+  position: sticky;
+  top: 0;
+  background: var(--table-header-bg);
+  color: var(--table-header-fg);
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  z-index: 1;
+}
+.review-table td { padding: 6px 8px; border-bottom: 1px solid var(--panel-border); vertical-align: middle; }
+.review-table tr.is-decided { background: rgba(0, 150, 136, 0.06); }
+.review-species { font-weight: 700; color: var(--header-bg); }
+.review-kind { color: #6b7280; white-space: nowrap; }
+.review-num { text-align: right; font-variant-numeric: tabular-nums; }
+.review-series { display: grid; gap: 1px; font-variant-numeric: tabular-nums; }
+.review-series-row { display: grid; grid-template-columns: 3.4em repeat(7, 3.2em); }
+.review-series-row span { text-align: right; padding: 0 2px; }
+.review-series-years span { color: #9ca3af; font-size: 0.72rem; }
+.review-series-label { text-align: left !important; color: #6b7280; }
+.review-series .is-year { font-weight: 800; color: #b91c1c; }
+.review-suggest { font-weight: 700; white-space: nowrap; }
+.review-suggest-steve { color: var(--accent-teal); }
+.review-suggest-audubon { color: #b45309; }
+.review-suggest-unclear { color: #6b7280; }
+.review-decision { white-space: nowrap; }
+.review-choice { display: block; cursor: pointer; }
+.review-other { width: 6em; margin-top: 2px; }
+.review-clear { margin-top: 2px; font-size: 0.75rem; background: none; border: none; color: #6b7280; text-decoration: underline; cursor: pointer; padding: 0; }
+.review-note { width: 12em; }
+.review-empty { padding: 16px; color: #6b7280; }
+body.review-mode .map-section { display: none; }
+body.review-mode .plot-section { flex: 1 1 auto; height: 100%; }
+.review-table { font-size: 0.78rem; }
+.review-series-row { grid-template-columns: 3em repeat(7, 2.9em); }
+.review-note { width: 7em; }
+.review-kind { white-space: normal; max-width: 8em; }
