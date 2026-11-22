@@ -1288,3 +1288,18 @@ body.review-mode .plot-section { flex: 1 1 auto; height: 100%; }
 .review-series-row { grid-template-columns: 3em repeat(7, 2.9em); }
 .review-note { width: 7em; }
 .review-kind { white-space: normal; max-width: 8em; }
+
+.leaflet-container .leaflet-control-attribution .attr-sources {
+  display: inline-block;
+  max-width: 14rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.leaflet-container .leaflet-control-attribution:hover .attr-sources,
+.leaflet-container .leaflet-control-attribution:focus-within .attr-sources {
+  max-width: none;
+  white-space: normal;
+}
