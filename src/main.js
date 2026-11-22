@@ -270,7 +270,7 @@ app.innerHTML = `
       </div>
     </div>
     <footer class="footerbar">
-      <span class="footerCopyright">&copy; MetoliusResearch / Bart Wickel, 2026</span>
+      <span class="footerCopyright">&copy; 2026 Bart Wickel / <a href="https://calbirds.org/" target="_blank" rel="noopener noreferrer" style="color:inherit">CalBirds</a></span>
     </footer>
 
     <div id="infoModal" class="modalOverlay hidden" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">

@@ -2,8 +2,8 @@
 
 ## About the Christmas Bird Count
 The Christmas Bird Count is the nation's longest-running community science bird project.  
-It occurs annually between December 14 and January 5 in more than 3000 count circles.  
-More information is available on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
+It occurs annually between December 14 and January 5 in over 3,000 count circles.  
+More information can be found on the [Audubon website](https://www.audubon.org/community-science/christmas-bird-count).
 
 ## About the tool
 This tool was developed to help CBC compilers review their count data from their eBird record for the day.
